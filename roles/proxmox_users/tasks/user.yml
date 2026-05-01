@@ -69,6 +69,7 @@
       - --output-format
       - json
   changed_when: false
+  check_mode: false
   register: proxmox_users_user_list
   when: proxmox_manage_pve_users | bool
 
@@ -98,6 +99,7 @@
       - --output-format
       - json
   changed_when: false
+  check_mode: false
   register: proxmox_users_acl_list
   when: proxmox_manage_pve_users | bool
 

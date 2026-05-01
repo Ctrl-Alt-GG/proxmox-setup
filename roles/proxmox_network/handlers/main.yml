@@ -8,6 +8,7 @@
   poll: 0
   changed_when: true
   when: proxmox_network_apply_changes | bool
+  register: proxmox_network_reload_job
 
 - name: Wait for Proxmox host after network reload
   ansible.builtin.wait_for_connection:
@@ -15,3 +16,16 @@
     timeout: "{{ proxmox_network_reconnect_timeout }}"
   listen: Reload Proxmox network
   when: proxmox_network_apply_changes | bool
+
+- name: Verify network reload completed successfully
+  ansible.builtin.async_status:
+    jid: "{{ proxmox_network_reload_job.ansible_job_id }}"
+  register: proxmox_network_reload_result
+  until: proxmox_network_reload_result.finished
+  retries: "{{ (proxmox_network_reload_async_timeout | int // 5) | int }}"
+  delay: 5
+  listen: Reload Proxmox network
+  when:
+    - proxmox_network_apply_changes | bool
+    - proxmox_network_reload_job is defined
+    - proxmox_network_reload_job.ansible_job_id is defined
