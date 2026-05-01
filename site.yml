@@ -1,0 +1,62 @@
+---
+- name: Configure Proxmox VE hosts
+  hosts: proxmox
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Configure Proxmox and Debian repositories
+      ansible.builtin.import_role:
+        name: proxmox_repositories
+      tags:
+        - repositories
+
+    - name: Apply repository changes before package upgrades
+      ansible.builtin.meta: flush_handlers
+
+    - name: Install Proxmox VE when needed
+      ansible.builtin.import_role:
+        name: proxmox_install
+      tags:
+        - install
+        - bootstrap
+
+    - name: Update host packages
+      ansible.builtin.import_role:
+        name: proxmox_updates
+      tags:
+        - updates
+
+    - name: Configure chrony upstream servers
+      ansible.builtin.import_role:
+        name: proxmox_chrony
+      tags:
+        - chrony
+        - ntp
+
+    - name: Configure host DNS servers
+      ansible.builtin.import_role:
+        name: proxmox_dns
+      tags:
+        - dns
+
+    - name: Configure Linux and Proxmox users
+      ansible.builtin.import_role:
+        name: proxmox_users
+      when: not (proxmox_install_deferred_reconciliation | default(false) | bool)
+      tags:
+        - users
+
+    - name: Configure Proxmox datacenter firewall
+      ansible.builtin.import_role:
+        name: proxmox_firewall
+      when: not (proxmox_install_deferred_reconciliation | default(false) | bool)
+      tags:
+        - firewall
+
+    - name: Configure Proxmox host networking
+      ansible.builtin.import_role:
+        name: proxmox_network
+      when: not (proxmox_install_deferred_reconciliation | default(false) | bool)
+      tags:
+        - network

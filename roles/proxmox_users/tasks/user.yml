@@ -1,0 +1,133 @@
+---
+- name: Validate admin user definition
+  ansible.builtin.assert:
+    that:
+      - proxmox_admin_user.name is defined
+      - proxmox_admin_user.name | length > 0
+      - proxmox_admin_user.password_hash is defined or proxmox_admin_user.password is defined
+      - (proxmox_admin_user.ssh_key_url | default(proxmox_ssh_key_default_url, true) | length) > 0
+    fail_msg: Each admin user needs name, password or password_hash, and an ssh_key_url or proxmox_ssh_key_default_url.
+
+- name: Ensure admin user groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ proxmox_admin_user.groups | default(proxmox_default_user_groups) }}"
+
+- name: Ensure Linux admin user exists
+  ansible.builtin.user:
+    name: "{{ proxmox_admin_user.name }}"
+    password: >-
+      {{
+        proxmox_admin_user.password_hash
+        if proxmox_admin_user.password_hash is defined
+        else (
+          proxmox_admin_user.password
+          | password_hash('sha512', ((proxmox_admin_user.name ~ proxmox_password_salt) | hash('sha256'))[:16])
+        )
+      }}
+    shell: "{{ proxmox_admin_user.shell | default('/bin/bash') }}"
+    groups: "{{ (proxmox_admin_user.groups | default(proxmox_default_user_groups)) | join(',') }}"
+    append: true
+    state: present
+  no_log: true
+
+- name: Download admin SSH keys
+  ansible.builtin.get_url:
+    url: "{{ proxmox_admin_user.ssh_key_url | default(proxmox_ssh_key_default_url, true) }}"
+    dest: "{{ proxmox_ssh_key_cache_dir }}/{{ proxmox_admin_user.name }}.keys"
+    checksum: "{{ proxmox_admin_user.ssh_key_checksum | default(omit) }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Read downloaded admin SSH keys
+  ansible.builtin.slurp:
+    src: "{{ proxmox_ssh_key_cache_dir }}/{{ proxmox_admin_user.name }}.keys"
+  register: proxmox_users_ssh_keys
+  changed_when: false
+
+- name: Configure admin authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ proxmox_admin_user.name }}"
+    key: "{{ proxmox_users_ssh_keys.content | b64decode }}"
+    exclusive: "{{ proxmox_admin_user.ssh_keys_exclusive | default(false) | bool }}"
+    manage_dir: true
+    state: present
+
+- name: Set Proxmox PAM user id
+  ansible.builtin.set_fact:
+    proxmox_users_pve_userid: "{{ proxmox_admin_user.name }}@pam"
+  when: proxmox_manage_pve_users | bool
+
+- name: List Proxmox users
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - user
+      - list
+      - --output-format
+      - json
+  changed_when: false
+  check_mode: false
+  register: proxmox_users_user_list
+  when: proxmox_manage_pve_users | bool
+
+- name: Set existing Proxmox user ids
+  ansible.builtin.set_fact:
+    proxmox_users_existing_userids: "{{ (proxmox_users_user_list.stdout | default('[]', true) | from_json) | map(attribute='userid') | list }}"
+  when: proxmox_manage_pve_users | bool
+
+- name: Create Proxmox PAM user
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - user
+      - add
+      - "{{ proxmox_users_pve_userid }}"
+  changed_when: true
+  when:
+    - proxmox_manage_pve_users | bool
+    - proxmox_users_pve_userid not in proxmox_users_existing_userids
+
+- name: List Proxmox ACLs
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - acl
+      - list
+      - --output-format
+      - json
+  changed_when: false
+  check_mode: false
+  register: proxmox_users_acl_list
+  when: proxmox_manage_pve_users | bool
+
+- name: Check existing Proxmox ACL
+  ansible.builtin.set_fact:
+    proxmox_users_existing_acl: >-
+      {{
+        ((proxmox_users_acl_list.stdout | default('[]', true) | from_json)
+        | selectattr('path', 'equalto', proxmox_admin_user.pve_path | default('/'))
+        | selectattr('ugid', 'equalto', proxmox_users_pve_userid)
+        | selectattr('roleid', 'equalto', proxmox_admin_user.pve_role | default('PVEAdmin'))
+        | list
+        | length) > 0
+      }}
+  when: proxmox_manage_pve_users | bool
+
+- name: Grant Proxmox role to PAM user
+  ansible.builtin.command:
+    argv:
+      - pveum
+      - acl
+      - modify
+      - "{{ proxmox_admin_user.pve_path | default('/') }}"
+      - --users
+      - "{{ proxmox_users_pve_userid }}"
+      - --roles
+      - "{{ proxmox_admin_user.pve_role | default('PVEAdmin') }}"
+  changed_when: true
+  when:
+    - proxmox_manage_pve_users | bool
+    - not proxmox_users_existing_acl

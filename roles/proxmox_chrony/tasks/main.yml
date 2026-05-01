@@ -1,0 +1,104 @@
+---
+- name: Install chrony
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+    update_cache: true
+
+- name: Ensure chrony include directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /etc/chrony/sources.d
+    - /etc/chrony/conf.d
+
+- name: Find non-managed chrony source files
+  ansible.builtin.find:
+    paths: /etc/chrony/sources.d
+    patterns: "*.sources"
+    file_type: file
+    excludes:
+      - ansible-managed.sources
+  register: proxmox_chrony_extra_sources
+
+- name: Remove non-managed chrony source files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ proxmox_chrony_extra_sources.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Restart chrony
+
+- name: Disable upstream chrony entries in the main config
+  ansible.builtin.replace:
+    path: /etc/chrony/chrony.conf
+    regexp: '^(?!# Ansible disabled upstream:)(\s*(server|pool|peer)\s+\S+.*)$'
+    replace: '# Ansible disabled upstream: \1'
+  notify: Restart chrony
+
+- name: Disable non-managed chrony source directories in the main config
+  ansible.builtin.replace:
+    path: /etc/chrony/chrony.conf
+    regexp: '^(?!# Ansible disabled upstream:)(\s*sourcedir\s+(?!/etc/chrony/sources\.d\b).*)$'
+    replace: '# Ansible disabled upstream: \1'
+  notify: Restart chrony
+
+- name: Find chrony config snippets
+  ansible.builtin.find:
+    paths: /etc/chrony/conf.d
+    patterns: "*.conf"
+    file_type: file
+  register: proxmox_chrony_conf_snippets
+
+- name: Disable upstream chrony entries in config snippets
+  ansible.builtin.replace:
+    path: "{{ item.path }}"
+    regexp: '^(?!# Ansible disabled upstream:)(\s*(server|pool|peer)\s+\S+.*)$'
+    replace: '# Ansible disabled upstream: \1'
+  loop: "{{ proxmox_chrony_conf_snippets.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Restart chrony
+
+- name: Disable non-managed chrony source directories in config snippets
+  ansible.builtin.replace:
+    path: "{{ item.path }}"
+    regexp: '^(?!# Ansible disabled upstream:)(\s*sourcedir\s+(?!/etc/chrony/sources\.d\b).*)$'
+    replace: '# Ansible disabled upstream: \1'
+  loop: "{{ proxmox_chrony_conf_snippets.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  notify: Restart chrony
+
+- name: Ensure chrony reads the managed sources directory
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: '^sourcedir /etc/chrony/sources\.d$'
+    line: sourcedir /etc/chrony/sources.d
+    state: present
+  notify: Restart chrony
+
+- name: Configure managed chrony upstream servers
+  ansible.builtin.template:
+    src: ansible-managed.sources.j2
+    dest: /etc/chrony/sources.d/ansible-managed.sources
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chrony
+
+- name: Inspect configured chrony sources
+  ansible.builtin.command:
+    argv:
+      - chronyc
+      - -n
+      - sources
+  changed_when: false
+  failed_when: false
+  register: proxmox_chrony_sources
+  when: not ansible_check_mode

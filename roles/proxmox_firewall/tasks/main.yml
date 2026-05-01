@@ -1,0 +1,12 @@
+---
+- name: Ensure Proxmox firewall directory exists
+  ansible.builtin.file:
+    path: /etc/pve/firewall
+    state: directory
+    mode: "0755"
+
+- name: Configure datacenter firewall
+  ansible.builtin.template:
+    src: cluster.fw.j2
+    dest: /etc/pve/firewall/cluster.fw
+    mode: "0640"

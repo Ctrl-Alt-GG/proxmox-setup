@@ -1,0 +1,7 @@
+[OPTIONS]
+enable: 1
+
+[IPSET management]
+{% for network in proxmox_mgmt_networks %}
+{{ network }}
+{% endfor %}

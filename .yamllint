@@ -1,0 +1,12 @@
+---
+extends: default
+
+rules:
+  document-start: enable
+  line-length:
+    max: 160
+    level: warning
+  truthy:
+    allowed-values:
+      - "true"
+      - "false"

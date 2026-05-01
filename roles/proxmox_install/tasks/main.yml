@@ -1,0 +1,150 @@
+---
+- name: Validate Debian 13 base system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == 'Debian'
+      - ansible_facts.distribution_major_version | int == 13
+    fail_msg: This playbook supports Debian 13 and Proxmox VE 9.x hosts.
+  when: proxmox_install_ve | bool
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  when: proxmox_install_ve | bool
+
+- name: Set Proxmox installation facts
+  ansible.builtin.set_fact:
+    proxmox_install_pve_installed: "{{ 'proxmox-ve' in ansible_facts.packages or 'pve-manager' in ansible_facts.packages }}"
+    proxmox_install_node_ip: >-
+      {{
+        proxmox_node_ip | default('', true)
+        or (proxmox_mgmt_address_cidr | default('', true) | regex_replace('/.*$', ''))
+        or ansible_facts.default_ipv4.address | default('', true)
+        or ansible_host | default('', true)
+      }}
+    proxmox_install_node_hostname: "{{ proxmox_node_hostname | default('', true) or ansible_facts.hostname }}"
+    proxmox_install_node_fqdn: "{{ proxmox_node_fqdn | default('', true) or ansible_facts.fqdn }}"
+  when: proxmox_install_ve | bool
+
+- name: Mark PVE reconciliation as deferred during Debian bootstrap check mode
+  ansible.builtin.set_fact:
+    proxmox_install_deferred_reconciliation: "{{ ansible_check_mode and not proxmox_install_pve_installed }}"
+  when: proxmox_install_ve | bool
+
+- name: Validate Proxmox node identity
+  ansible.builtin.assert:
+    that:
+      - not (proxmox_manage_hosts_entry | bool) or proxmox_install_node_ip | length > 0
+      - proxmox_install_node_hostname | length > 0
+    fail_msg: Set proxmox_node_ip and proxmox_node_hostname or ensure facts can discover them.
+  when: proxmox_install_ve | bool
+
+- name: Ensure node hostname resolves locally for Proxmox
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: "^{{ proxmox_install_node_ip | regex_escape }}\\s+"
+    line: >-
+      {{
+        proxmox_install_node_ip ~ ' ' ~ proxmox_install_node_fqdn ~ ' ' ~ proxmox_install_node_hostname
+        if proxmox_install_node_fqdn != proxmox_install_node_hostname
+        else proxmox_install_node_ip ~ ' ' ~ proxmox_install_node_hostname
+      }}
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - proxmox_install_ve | bool
+    - proxmox_manage_hosts_entry | bool
+
+- name: Preseed postfix mailer type
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "{{ proxmox_postfix_main_mailer_type }}"
+    vtype: select
+  when:
+    - proxmox_install_ve | bool
+    - "'postfix' in proxmox_install_packages"
+
+- name: Preseed postfix mail name
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/mailname
+    value: "{{ proxmox_install_node_fqdn }}"
+    vtype: string
+  when:
+    - proxmox_install_ve | bool
+    - "'postfix' in proxmox_install_packages"
+
+- name: Install Proxmox VE packages
+  ansible.builtin.apt:
+    name: "{{ proxmox_install_packages }}"
+    state: present
+    update_cache: true
+    install_recommends: true
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+  register: proxmox_install_packages_result
+  when: proxmox_install_ve | bool
+
+- name: Remove packages that conflict with the desired Proxmox baseline
+  ansible.builtin.apt:
+    name: "{{ proxmox_remove_packages }}"
+    state: absent
+    autoremove: true
+  when:
+    - proxmox_install_ve | bool
+    - proxmox_remove_packages | length > 0
+
+- name: Reboot after installing Proxmox kernel when enabled
+  ansible.builtin.reboot:
+    msg: Rebooting into the Proxmox kernel after package installation.
+    reboot_timeout: 1800
+  when:
+    - proxmox_install_ve | bool
+    - proxmox_reboot_after_kernel_install | bool
+    - proxmox_install_packages_result.changed | default(false)
+    - ansible_facts.kernel is not search('-pve')
+
+- name: Refresh facts after optional reboot
+  ansible.builtin.setup:
+  when:
+    - proxmox_install_ve | bool
+    - proxmox_reboot_after_kernel_install | bool
+    - proxmox_install_packages_result.changed | default(false)
+    - ansible_facts.kernel is not search('-pve')
+
+- name: Report pending Proxmox kernel reboot
+  ansible.builtin.debug:
+    msg: Proxmox VE packages are installed, but the host is not running a Proxmox kernel yet. Set proxmox_reboot_after_kernel_install=true or reboot manually.
+  when:
+    - proxmox_install_ve | bool
+    - ansible_facts.kernel is not search('-pve')
+
+- name: Gather service facts after Proxmox installation
+  ansible.builtin.service_facts:
+  when: proxmox_install_ve | bool
+
+- name: Ensure Proxmox services are enabled and started
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: "{{ proxmox_pve_services }}"
+  when:
+    - proxmox_install_ve | bool
+    - item in ansible_facts.services
+
+- name: Wait for the Proxmox cluster filesystem
+  ansible.builtin.wait_for:
+    path: /etc/pve
+    state: present
+    timeout: 60
+  when:
+    - proxmox_install_ve | bool
+    - not ansible_check_mode
+
+- name: Report deferred PVE reconciliation during check mode
+  ansible.builtin.debug:
+    msg: PVE-specific reconciliation roles are skipped in check mode until Proxmox VE is installed by a real run.
+  when: proxmox_install_deferred_reconciliation | default(false) | bool
