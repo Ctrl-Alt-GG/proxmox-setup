@@ -1,0 +1,17 @@
+---
+- name: Reload Proxmox network
+  ansible.builtin.command:
+    argv:
+      - ifreload
+      - -a
+  async: "{{ proxmox_network_reload_async_timeout }}"
+  poll: 0
+  changed_when: true
+  when: proxmox_network_apply_changes | bool
+
+- name: Wait for Proxmox host after network reload
+  ansible.builtin.wait_for_connection:
+    delay: 5
+    timeout: "{{ proxmox_network_reconnect_timeout }}"
+  listen: Reload Proxmox network
+  when: proxmox_network_apply_changes | bool

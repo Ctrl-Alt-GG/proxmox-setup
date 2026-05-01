@@ -1,0 +1,48 @@
+---
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when: proxmox_disable_systemd_resolved | bool or proxmox_disable_resolvconf | bool
+
+- name: Disable systemd-resolved when present
+  ansible.builtin.systemd_service:
+    name: systemd-resolved.service
+    state: stopped
+    enabled: false
+    masked: true
+  when:
+    - proxmox_disable_systemd_resolved | bool
+    - "'systemd-resolved.service' in ansible_facts.services"
+
+- name: Disable resolvconf when present
+  ansible.builtin.systemd_service:
+    name: resolvconf.service
+    state: stopped
+    enabled: false
+    masked: true
+  when:
+    - proxmox_disable_resolvconf | bool
+    - "'resolvconf.service' in ansible_facts.services"
+
+- name: Inspect resolv.conf path
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: proxmox_dns_resolv_conf
+  when: proxmox_manage_resolv_conf | bool
+
+- name: Remove resolv.conf symlink
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+  when:
+    - proxmox_manage_resolv_conf | bool
+    - proxmox_dns_resolv_conf.stat.islnk | default(false)
+
+- name: Configure resolver servers
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: proxmox_manage_resolv_conf | bool

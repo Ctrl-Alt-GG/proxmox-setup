@@ -1,0 +1,22 @@
+---
+- name: Ensure admin user definitions are valid
+  ansible.builtin.assert:
+    that:
+      - proxmox_admin_users is iterable
+    fail_msg: proxmox_admin_users must be a list of user definitions.
+
+- name: Ensure SSH key cache directory exists
+  ansible.builtin.file:
+    path: "{{ proxmox_ssh_key_cache_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: proxmox_admin_users | length > 0
+
+- name: Configure admin users
+  ansible.builtin.include_tasks: user.yml
+  loop: "{{ proxmox_admin_users }}"
+  loop_control:
+    loop_var: proxmox_admin_user
+    label: "{{ proxmox_admin_user.name | default('missing-name') }}"

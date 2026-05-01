@@ -1,0 +1,6 @@
+{% if proxmox_dns_search | length > 0 %}
+search {{ proxmox_dns_search | join(' ') }}
+{% endif %}
+{% for server in proxmox_dns_servers %}
+nameserver {{ server }}
+{% endfor %}

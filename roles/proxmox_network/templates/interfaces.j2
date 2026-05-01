@@ -1,0 +1,40 @@
+auto lo
+iface lo inet loopback
+
+{% if proxmox_manage_mgmt_interface | bool %}
+auto {{ proxmox_mgmt_iface }}
+iface {{ proxmox_mgmt_iface }} inet static
+    address {{ proxmox_mgmt_address_cidr }}
+{% if proxmox_mgmt_gateway | length > 0 %}
+    gateway {{ proxmox_mgmt_gateway }}
+{% endif %}
+{% if proxmox_dns_servers | length > 0 %}
+    dns-nameservers {{ proxmox_dns_servers | join(' ') }}
+{% endif %}
+{% if proxmox_dns_search | length > 0 %}
+    dns-search {{ proxmox_dns_search | join(' ') }}
+{% endif %}
+
+{% endif %}
+auto {{ proxmox_bridge_iface }}
+iface {{ proxmox_bridge_iface }} inet manual
+
+auto {{ proxmox_bridge_name }}
+iface {{ proxmox_bridge_name }} inet {% if proxmox_bridge_address_cidr | length > 0 %}static{% else %}manual{% endif %}
+{% if proxmox_bridge_address_cidr | length > 0 %}
+    address {{ proxmox_bridge_address_cidr }}
+{% endif %}
+{% if proxmox_bridge_gateway | length > 0 %}
+    gateway {{ proxmox_bridge_gateway }}
+{% endif %}
+    bridge-ports {{ proxmox_bridge_iface }}
+    bridge-stp off
+    bridge-fd 0
+{% if proxmox_bridge_comment | length > 0 %}
+# {{ proxmox_bridge_comment }}
+{% endif %}
+
+{% for stanza in proxmox_network_additional_interfaces %}
+{{ stanza }}
+
+{% endfor %}

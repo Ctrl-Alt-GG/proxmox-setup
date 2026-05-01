@@ -1,0 +1,42 @@
+---
+- name: Validate network role inputs
+  ansible.builtin.assert:
+    that:
+      - proxmox_bridge_name | length > 0
+      - proxmox_bridge_iface | length > 0
+      - not (proxmox_manage_mgmt_interface | bool) or proxmox_mgmt_iface | length > 0
+      - not (proxmox_manage_mgmt_interface | bool) or proxmox_mgmt_address_cidr | length > 0
+      - not (proxmox_manage_mgmt_interface | bool) or proxmox_allow_mgmt_iface_change | bool
+      - proxmox_bridge_iface != proxmox_mgmt_iface
+      - proxmox_mgmt_gateway | length == 0 or proxmox_bridge_gateway | length == 0
+    fail_msg: Configure bridge and management interface variables before enabling the network role.
+  when: proxmox_manage_network | bool
+
+- name: Check if ifreload is available
+  ansible.builtin.command:
+    argv:
+      - ifreload
+      - --version
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: proxmox_network_ifreload
+  when: proxmox_manage_network | bool
+
+- name: Assert ifupdown2 is installed
+  ansible.builtin.assert:
+    that:
+      - proxmox_network_ifreload.rc == 0
+    fail_msg: ifreload was not found. Install ifupdown2 before managing Proxmox networking.
+  when: proxmox_manage_network | bool
+
+- name: Configure Proxmox interfaces
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Reload Proxmox network
+  when: proxmox_manage_network | bool

@@ -1,0 +1,70 @@
+---
+proxmox_codename: trixie
+proxmox_debian_mirror: http://debian-archive.trafficmanager.net/debian/
+proxmox_debian_security_mirror: http://security.debian.org/debian-security
+proxmox_pve_repo_url: http://download.proxmox.com/debian/pve
+proxmox_ceph_repo_url: http://download.proxmox.com/debian/ceph-squid
+
+proxmox_install_ve: true
+proxmox_install_packages:
+  - proxmox-default-kernel
+  - proxmox-ve
+  - postfix
+  - open-iscsi
+  - ifupdown2
+  - chrony
+proxmox_remove_packages: []
+proxmox_manage_hosts_entry: true
+proxmox_node_ip: ""
+proxmox_node_hostname: ""
+proxmox_node_fqdn: ""
+proxmox_postfix_main_mailer_type: Local only
+proxmox_reboot_after_kernel_install: false
+proxmox_pve_services:
+  - pve-cluster.service
+  - pvedaemon.service
+  - pveproxy.service
+  - pvestatd.service
+
+proxmox_perform_upgrade: true
+
+proxmox_ntp_servers:
+  - 192.168.130.1
+  - 192.168.130.53
+
+proxmox_dns_servers:
+  - 192.168.130.1
+  - 192.168.130.53
+proxmox_dns_search: []
+proxmox_manage_resolv_conf: true
+proxmox_disable_systemd_resolved: true
+proxmox_disable_resolvconf: true
+
+proxmox_admin_users: []
+proxmox_default_user_groups:
+  - sudo
+proxmox_manage_pve_users: true
+proxmox_password_salt: proxmox-setup-change-me
+proxmox_ssh_key_default_url: ""
+proxmox_ssh_key_cache_dir: /var/lib/ansible/proxmox-setup/ssh-keys
+
+proxmox_mgmt_networks:
+  - 192.168.0.0/16
+
+proxmox_manage_network: true
+proxmox_manage_mgmt_interface: true
+proxmox_allow_mgmt_iface_change: false
+proxmox_network_apply_changes: true
+proxmox_network_reload_async_timeout: 45
+proxmox_network_reconnect_timeout: 180
+proxmox_network_additional_interfaces: []
+
+proxmox_mgmt_iface: ""
+proxmox_mgmt_address_cidr: ""
+proxmox_mgmt_gateway: ""
+
+proxmox_bridge_name: vmbr0
+proxmox_bridge_iface: ""
+proxmox_bridge_address_cidr: ""
+proxmox_bridge_gateway: ""
+proxmox_bridge_comment: VM bridge managed by Ansible

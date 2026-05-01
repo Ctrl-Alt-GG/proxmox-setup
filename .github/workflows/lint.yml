@@ -1,0 +1,38 @@
+---
+name: Lint
+
+"on":
+  push:
+  pull_request:
+
+jobs:
+  ansible-lint:
+    name: Ansible lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install lint tooling
+        run: pip install ansible ansible-lint yamllint
+
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml
+
+      - name: Run yamllint
+        run: yamllint .
+
+      - name: Run syntax check
+        run: ansible-playbook --syntax-check site.yml
+
+      - name: Run ansible-lint
+        run: ansible-lint

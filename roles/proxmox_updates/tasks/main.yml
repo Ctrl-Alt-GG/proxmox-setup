@@ -1,0 +1,18 @@
+---
+- name: Upgrade installed packages
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+    autoremove: true
+    autoclean: true
+  when: proxmox_perform_upgrade | bool
+
+- name: Check for required reboot marker
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: proxmox_updates_reboot_required
+
+- name: Report pending reboot
+  ansible.builtin.debug:
+    msg: A reboot is required to finish applying package updates.
+  when: proxmox_updates_reboot_required.stat.exists

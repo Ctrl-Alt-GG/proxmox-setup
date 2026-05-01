@@ -1,0 +1,59 @@
+---
+- name: Assert Proxmox VE 9 repository codename
+  ansible.builtin.assert:
+    that:
+      - proxmox_codename == 'trixie'
+    fail_msg: This playbook is written for Proxmox VE 9.x on Debian trixie.
+
+- name: Disable enterprise repository files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/pve-enterprise.list
+    - /etc/apt/sources.list.d/pve-enterprise.sources
+    - /etc/apt/sources.list.d/ceph.list
+    - /etc/apt/sources.list.d/ceph.sources
+    - /etc/apt/sources.list.d/ceph-enterprise.list
+    - /etc/apt/sources.list.d/ceph-enterprise.sources
+  notify: Refresh apt package cache
+
+- name: Check Proxmox archive keyring
+  ansible.builtin.stat:
+    path: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  register: proxmox_repositories_keyring
+
+- name: Download Proxmox archive keyring when missing
+  ansible.builtin.get_url:
+    url: "https://enterprise.proxmox.com/debian/proxmox-release-{{ proxmox_codename }}.gpg"
+    dest: /usr/share/keyrings/proxmox-archive-keyring.gpg
+    mode: "0644"
+  when: not proxmox_repositories_keyring.stat.exists
+  notify: Refresh apt package cache
+
+- name: Configure Debian repositories
+  ansible.builtin.template:
+    src: sources.list.j2
+    dest: /etc/apt/sources.list
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Refresh apt package cache
+
+- name: Configure Proxmox no-subscription repository
+  ansible.builtin.template:
+    src: pve-no-subscription.sources.j2
+    dest: /etc/apt/sources.list.d/pve-no-subscription.sources
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Refresh apt package cache
+
+- name: Configure Ceph no-subscription repository
+  ansible.builtin.template:
+    src: ceph-no-subscription.sources.j2
+    dest: /etc/apt/sources.list.d/ceph-no-subscription.sources
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Refresh apt package cache
