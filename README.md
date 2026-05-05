@@ -111,3 +111,24 @@ yamllint .
 ansible-playbook --syntax-check site.yml
 ansible-lint
 ```
+
+## Dev Container / Codespaces
+
+A [Development Container](https://containers.dev) definition is provided in
+`.devcontainer/devcontainer.json`. It works with GitHub Codespaces, the
+VS Code Dev Containers extension, and any other devcontainer-compatible tool.
+
+The container is based on a Python image and, on creation, installs the same
+tooling used by CI (`ansible`, `ansible-lint`, `yamllint`) and the Ansible
+collections from `requirements.yml`. The Red Hat Ansible and YAML extensions
+are preinstalled for editor support.
+
+To use it:
+
+- **GitHub Codespaces:** open the repository in Codespaces; the container is
+  built automatically.
+- **VS Code locally:** install the *Dev Containers* extension and run
+  *Dev Containers: Reopen in Container*.
+
+Once the container is ready you can run the validation commands above
+directly inside it.
