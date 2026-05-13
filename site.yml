@@ -13,6 +13,8 @@
 
     - name: Apply repository changes before package upgrades
       ansible.builtin.meta: flush_handlers
+      tags:
+        - always
 
     - name: Install Proxmox VE when needed
       ansible.builtin.import_role:
@@ -20,6 +22,19 @@
       tags:
         - install
         - bootstrap
+
+    - name: Reconcile repositories after Proxmox VE installation
+      ansible.builtin.import_role:
+        name: proxmox_repositories
+      tags:
+        - repositories
+        - install
+        - bootstrap
+
+    - name: Apply post-install repository changes before package upgrades
+      ansible.builtin.meta: flush_handlers
+      tags:
+        - always
 
     - name: Update host packages
       ansible.builtin.import_role:

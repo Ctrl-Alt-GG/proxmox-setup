@@ -27,7 +27,7 @@ Ansible playbook for turning Debian 13 hosts into Proxmox VE 9.1 hosts and bring
 - `roles/proxmox_chrony` pins upstream NTP servers.
 - `roles/proxmox_dns` pins upstream DNS servers.
 - `roles/proxmox_users` manages Linux and Proxmox users.
-- `roles/proxmox_firewall` manages `/etc/pve/firewall/cluster.fw`.
+- `roles/proxmox_firewall` reconciles the datacenter firewall options and the `management` IPSet via the Proxmox cluster API (`pvesh`).
 - `roles/proxmox_network` manages `/etc/network/interfaces` and runs `ifreload -a`.
 
 ## Usage
@@ -93,6 +93,8 @@ Plain `password` values are supported, but committed inventories should use Ansi
 ## Debian Bootstrap Notes
 
 On plain Debian 13, the playbook installs the Proxmox repository, Proxmox kernel, `proxmox-ve`, `postfix`, `open-iscsi`, `ifupdown2`, and `chrony` before the reconciliation roles run. The playbook does not reboot by default; after the first bootstrap run, reboot manually or set `proxmox_reboot_after_kernel_install` to `true` for hosts where an automated reboot is acceptable.
+
+The `proxmox-ve` package ships `/etc/apt/sources.list.d/pve-enterprise.sources` (and the matching Ceph enterprise file). The playbook re-runs the `proxmox_repositories` role immediately after `proxmox_install` so those package-shipped enterprise sources are removed and the apt cache is refreshed before the `proxmox_updates` role runs. When `proxmox_perform_upgrade` is `true`, the update role uses Ansible's `ansible.builtin.apt` module with `update_cache: true`, which would otherwise fail against the unauthenticated enterprise repository.
 
 In check mode on a plain Debian host, PVE-specific reconciliation roles are skipped because `proxmox-ve`, `/etc/pve`, `pveum`, and `ifreload` do not exist until a real bootstrap run installs them. Existing Proxmox VE hosts still run the full drift check.
 
