@@ -13,6 +13,8 @@
 
     - name: Apply repository changes before package upgrades
       ansible.builtin.meta: flush_handlers
+      tags:
+        - always
 
     - name: Install Proxmox VE when needed
       ansible.builtin.import_role:
@@ -31,6 +33,8 @@
 
     - name: Apply post-install repository changes before package upgrades
       ansible.builtin.meta: flush_handlers
+      tags:
+        - always
 
     - name: Update host packages
       ansible.builtin.import_role:
