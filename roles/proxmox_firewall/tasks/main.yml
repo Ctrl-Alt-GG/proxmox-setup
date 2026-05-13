@@ -1,13 +1,131 @@
 ---
-- name: Ensure Proxmox firewall directory exists
-  ansible.builtin.file:
-    path: /etc/pve/firewall
-    state: directory
-    mode: "0755"
+- name: Ensure pvesh is available
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - --version
+  changed_when: false
+  check_mode: false
 
-- name: Configure datacenter firewall
-  ansible.builtin.template:
-    src: cluster.fw.j2
-    dest: /etc/pve/firewall/cluster.fw
-    mode: "0640"
-    unsafe_writes: true
+- name: Read current cluster firewall options
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - /cluster/firewall/options
+      - --output-format
+      - json
+  changed_when: false
+  check_mode: false
+  register: proxmox_firewall_options_raw
+
+- name: Compute desired cluster firewall options
+  ansible.builtin.set_fact:
+    proxmox_firewall_options_current: "{{ proxmox_firewall_options_raw.stdout | default('{}', true) | from_json }}"
+    proxmox_firewall_options_desired: >-
+      {{
+        {'enable': (1 if proxmox_firewall_enable | bool else 0)}
+        | combine(proxmox_firewall_options | default({}))
+      }}
+
+- name: Compute cluster firewall option diff
+  ansible.builtin.set_fact:
+    proxmox_firewall_options_changes: "{{ proxmox_firewall_options_changes | default({}) | combine({item.key: item.value}) }}"
+  loop: "{{ proxmox_firewall_options_desired | dict2items }}"
+  when: (proxmox_firewall_options_current[item.key] | default(none)) != item.value
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Apply cluster firewall option changes
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - /cluster/firewall/options
+      - "-{{ item.key }}"
+      - "{{ item.value }}"
+  changed_when: true
+  loop: "{{ (proxmox_firewall_options_changes | default({})) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  notify: Validate Proxmox firewall configuration
+
+- name: Read existing cluster firewall IPSets
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - /cluster/firewall/ipset
+      - --output-format
+      - json
+  changed_when: false
+  check_mode: false
+  register: proxmox_firewall_ipsets_raw
+
+- name: Set existing cluster firewall IPSet names
+  ansible.builtin.set_fact:
+    proxmox_firewall_existing_ipsets: >-
+      {{
+        (proxmox_firewall_ipsets_raw.stdout | default('[]', true) | from_json)
+        | map(attribute='name')
+        | list
+      }}
+
+- name: Create management IPSet
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - /cluster/firewall/ipset
+      - -name
+      - "{{ proxmox_firewall_mgmt_ipset_name }}"
+      - -comment
+      - "{{ proxmox_firewall_mgmt_ipset_comment }}"
+  changed_when: true
+  when: proxmox_firewall_mgmt_ipset_name not in proxmox_firewall_existing_ipsets
+  notify: Validate Proxmox firewall configuration
+
+- name: Read management IPSet members
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - "/cluster/firewall/ipset/{{ proxmox_firewall_mgmt_ipset_name }}"
+      - --output-format
+      - json
+  changed_when: false
+  check_mode: false
+  register: proxmox_firewall_ipset_members_raw
+  when: proxmox_firewall_mgmt_ipset_name in proxmox_firewall_existing_ipsets
+
+- name: Determine management IPSet member diff
+  ansible.builtin.set_fact:
+    proxmox_firewall_ipset_current_cidrs: >-
+      {{
+        ((proxmox_firewall_ipset_members_raw | default({})).stdout | default('[]', true) | from_json)
+        | map(attribute='cidr')
+        | list
+      }}
+    proxmox_firewall_ipset_desired_cidrs: "{{ proxmox_mgmt_networks | default([]) | list }}"
+
+- name: Add CIDRs to management IPSet
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - "/cluster/firewall/ipset/{{ proxmox_firewall_mgmt_ipset_name }}"
+      - -cidr
+      - "{{ item }}"
+  changed_when: true
+  loop: "{{ proxmox_firewall_ipset_desired_cidrs | difference(proxmox_firewall_ipset_current_cidrs) }}"
+  notify: Validate Proxmox firewall configuration
+
+- name: Remove CIDRs from management IPSet
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - delete
+      - "/cluster/firewall/ipset/{{ proxmox_firewall_mgmt_ipset_name }}/{{ item }}"
+  changed_when: true
+  loop: "{{ proxmox_firewall_ipset_current_cidrs | difference(proxmox_firewall_ipset_desired_cidrs) }}"
+  notify: Validate Proxmox firewall configuration

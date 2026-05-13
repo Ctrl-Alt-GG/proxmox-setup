@@ -1,0 +1,5 @@
+---
+proxmox_firewall_enable: true
+proxmox_firewall_options: {}
+proxmox_firewall_mgmt_ipset_name: management
+proxmox_firewall_mgmt_ipset_comment: Trusted management networks (managed by Ansible)

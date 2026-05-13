@@ -1,0 +1,9 @@
+---
+- name: Validate Proxmox firewall configuration
+  ansible.builtin.command:
+    argv:
+      - pve-firewall
+      - compile
+  changed_when: false
+  register: proxmox_firewall_compile_result
+  failed_when: proxmox_firewall_compile_result.rc != 0

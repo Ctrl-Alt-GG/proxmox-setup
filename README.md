@@ -27,7 +27,7 @@ Ansible playbook for turning Debian 13 hosts into Proxmox VE 9.1 hosts and bring
 - `roles/proxmox_chrony` pins upstream NTP servers.
 - `roles/proxmox_dns` pins upstream DNS servers.
 - `roles/proxmox_users` manages Linux and Proxmox users.
-- `roles/proxmox_firewall` manages `/etc/pve/firewall/cluster.fw`.
+- `roles/proxmox_firewall` reconciles the datacenter firewall options and the `management` IPSet via the Proxmox cluster API (`pvesh`).
 - `roles/proxmox_network` manages `/etc/network/interfaces` and runs `ifreload -a`.
 
 ## Usage

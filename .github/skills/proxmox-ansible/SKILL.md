@@ -29,7 +29,7 @@ Use this skill for this repository's Proxmox VE 9.1 automation.
 - DNS upstream servers must be only `proxmox_dns_servers`; the role owns `/etc/resolv.conf` when `proxmox_manage_resolv_conf` is true.
 - Users are Linux PAM users and Proxmox PAM-realm users (`<name>@pam`) when `proxmox_manage_pve_users` is true.
 - PVE admin role is granted with `pveum acl modify / --users <name>@pam --roles PVEAdmin` unless user variables override path or role.
-- Datacenter firewall config lives at `/etc/pve/firewall/cluster.fw`; keep `[OPTIONS] enable: 1` and `[IPSET management]` from `proxmox_mgmt_networks`.
+- Datacenter firewall is configured through the Proxmox cluster API with `pvesh`: `set /cluster/firewall/options -enable 1` and reconcile the `management` IPSet at `/cluster/firewall/ipset/management` from `proxmox_mgmt_networks`. Do not template `/etc/pve/firewall/cluster.fw` directly; pmxcfs disallows atomic renames and the API performs locking and validation.
 
 ## Network Baseline
 
