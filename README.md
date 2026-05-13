@@ -94,6 +94,8 @@ Plain `password` values are supported, but committed inventories should use Ansi
 
 On plain Debian 13, the playbook installs the Proxmox repository, Proxmox kernel, `proxmox-ve`, `postfix`, `open-iscsi`, `ifupdown2`, and `chrony` before the reconciliation roles run. The playbook does not reboot by default; after the first bootstrap run, reboot manually or set `proxmox_reboot_after_kernel_install` to `true` for hosts where an automated reboot is acceptable.
 
+The `proxmox-ve` package ships `/etc/apt/sources.list.d/pve-enterprise.sources` (and the matching Ceph enterprise file). The playbook re-runs the `proxmox_repositories` role immediately after `proxmox_install` so those package-shipped enterprise sources are removed and the apt cache is refreshed before `proxmox_updates` performs `apt-get update`.
+
 In check mode on a plain Debian host, PVE-specific reconciliation roles are skipped because `proxmox-ve`, `/etc/pve`, `pveum`, and `ifreload` do not exist until a real bootstrap run installs them. Existing Proxmox VE hosts still run the full drift check.
 
 ## Network Safety

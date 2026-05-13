@@ -21,6 +21,17 @@
         - install
         - bootstrap
 
+    - name: Reconcile repositories after Proxmox VE installation
+      ansible.builtin.import_role:
+        name: proxmox_repositories
+      tags:
+        - repositories
+        - install
+        - bootstrap
+
+    - name: Apply post-install repository changes before package upgrades
+      ansible.builtin.meta: flush_handlers
+
     - name: Update host packages
       ansible.builtin.import_role:
         name: proxmox_updates
