@@ -1,11 +1,14 @@
 ---
 - name: Ensure pvesh is available
-  ansible.builtin.command:
-    argv:
-      - pvesh
-      - --version
-  changed_when: false
+  ansible.builtin.stat:
+    path: /usr/bin/pvesh
+  register: proxmox_firewall_pvesh_stat
   check_mode: false
+
+- name: Fail when pvesh is missing
+  ansible.builtin.fail:
+    msg: "pvesh is required but was not found at /usr/bin/pvesh; ensure proxmox-ve is installed before running the proxmox_firewall role."
+  when: not proxmox_firewall_pvesh_stat.stat.exists
 
 - name: Read current cluster firewall options
   ansible.builtin.command:
